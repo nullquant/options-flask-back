@@ -1,7 +1,7 @@
-Setup environment:
-# activate
+# Setup environment:
+activate
 
-To run:
-# flask run
-or
-# python app.py
+# To run:
+flask run
+# or
+python app.py
