@@ -3,6 +3,8 @@ from psycopg2 import OperationalError, errorcodes, errors
 from urllib.parse import urlparse
 import os
 import sys
+import holidays
+import datetime
 
 #url = urlparse(os.environ.get('DATABASE_URL'))
 #db = "dbname=%s user=%s password=%s host=%s " % (url.path[1:], url.username, url.password, url.hostname)
@@ -52,8 +54,8 @@ class PostgresDB:
         self.error = "\npsycopg2 ERROR: %s on line number: %d\n" %(str(err), line_num)
         self.error += "psycopg2 error type: %s\n" % str(err_type)
         # print the pgcode and pgerror exceptions
-        self.error += "pgerror: %d\n" % err.pgerror
-        self.error += "pgcode: %d\n" % err.pgcode
+        #self.error += "pgerror: %d\n" % err.pgerror
+        #self.error += "pgcode: %d\n" % err.pgcode
 
 
 def get_db():
@@ -69,4 +71,18 @@ def get_db():
         
     return db
 
+ru_holidays = holidays.RU()
+
+def epoch(dt):
+    return int(round(dt.timestamp() * 1000))
+
+def epoch_from_str(dateString):
+    return epoch(datetime.datetime.strptime(dateString, "%Y-%m-%d %H:%M:%S"))
+
+def working_day(dt):
+    dt_date = dt.date()
+    if dt_date in ru_holidays:
+        return False
+    dt_weekday = dt_date.weekday()
+    return dt_weekday != 5 and dt_weekday != 6
     

@@ -7,6 +7,7 @@ api = Api(app)
 from app import home
 from app import futures
 from app import security
+from app import futures_candles
 
 if __name__ == '__main__':
     app.run()

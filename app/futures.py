@@ -3,6 +3,7 @@ import urllib.request
 from flask import request
 import datetime
 import simplejson as json
+from time import sleep
 
 # A route to return all of the available futures at date.
 # http://127.0.0.1:5000/api/v1/futures?date=2021-04-01
@@ -29,20 +30,20 @@ def api_futures():
     # check if table exists
     rows = db.select("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='futures_by_date');")
     if rows[0][0] == False:
-        if not db.execute("CREATE TABLE futures_by_date (" + \
-            "trade_date character varying(10), " + \
-            "secid character varying(36), " + \
-            "open_price numeric(10, 4), " + \
-            "low_price numeric(10, 4), " + \
-            "high_price numeric(10, 4), " + \
-            "close_price numeric(10, 4), " + \
-            "volume integer, " + \
+        if not db.execute("CREATE TABLE futures_by_date (" \
+            "trade_date character varying(10), " \
+            "secid character varying(36), " \
+            "open_price numeric(10, 4), " \
+            "low_price numeric(10, 4), " \
+            "high_price numeric(10, 4), " \
+            "close_price numeric(10, 4), " \
+            "volume integer, " \
             "open_position integer);"):
             db.close()
-            return "Can't create table FUTURES_BY_DATE" + db.error, 200
+            return "Can't create table FUTURES_BY_DATE. " + db.error, 200
     else:
         # select futures for that date
-        rows = db.select("SELECT * FROM futures_by_date WHERE trade_date=%s",(requestDateString,))
+        rows = db.select("SELECT * FROM futures_by_date WHERE trade_date=%s;",(requestDateString,))
         if len(rows) != 0:
             db.close()
             return json.dumps(rows), 200
@@ -60,6 +61,7 @@ def api_futures():
         count += 1
         if index >= moexData["history.cursor"]["data"][0][1] or count > 10:
             break
+        sleep(0.10)
         
     # write data to DB
     needToCommit = False
@@ -69,7 +71,7 @@ def api_futures():
         if row[9] is None or row[9] == 0:
             continue    
         query += "('%s', '%s', %.4f, %.4f, %.4f, %.4f, %d, %d), " \
-                % (row[1], row[2], row[3], row[4], row[5], row[6], row[9], row[10])
+            % (row[1], row[2], row[3], row[4], row[5], row[6], row[9], row[10])
         needToCommit = True
     query = query[:-2] + ";"
 
@@ -79,7 +81,7 @@ def api_futures():
             return "Can't write to table FUTURES_BY_DATE", 200
 
     # select futures for that date
-    rows = db.select("SELECT * FROM futures_by_date WHERE trade_date=%s",(requestDateString,))
+    rows = db.select("SELECT * FROM futures_by_date WHERE trade_date=%s;",(requestDateString,))
     db.close()
     return json.dumps(rows), 200
 
