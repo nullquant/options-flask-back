@@ -18,9 +18,11 @@ class PostgresDB:
         if not self.connected:
             return
         try:
-            self.cursor.execute(*args)
+            query = self.cursor.mogrify(*args)
+            self.cursor.execute(query)
         except Exception as err:
             self.error_message(err)
+            print(self.error)
             self.connection.rollback()
             return
         return self.cursor.fetchall()
@@ -85,4 +87,4 @@ def working_day(dt):
         return False
     dt_weekday = dt_date.weekday()
     return dt_weekday != 5 and dt_weekday != 6
-    
+  

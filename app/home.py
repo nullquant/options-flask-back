@@ -1,8 +1,8 @@
-from app import app, db_pg
+from app import app, utils
 
 @app.route('/', methods=['GET'])
 def home():
-    db = db_pg.get_db()
+    db = utils.get_db()
     if not db.connected:
         return db.message, 200
     else:

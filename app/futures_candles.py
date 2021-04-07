@@ -1,9 +1,10 @@
-from app import app, utils
+from app import app, utils, ema
 import urllib.request
 from flask import request
 import datetime
 import simplejson as json
 from time import sleep
+import numpy as np
 
 # A route to get candles data
 # http://127.0.0.1:5000/api/v1/futures/candles?sec=SiH1&date=2021-03-13
@@ -47,6 +48,8 @@ def api_futures_candles():
     previousDate = requestDate - datetime.timedelta(days=1)
     nextDate = requestDate + datetime.timedelta(days=1)
 
+    candles = [[], [], [], [], [], [], []]
+
     # check if table exists
     rows = db.select("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name=%s);", \
         (securityString + "_candles", ))
@@ -65,42 +68,59 @@ def api_futures_candles():
             return "Can't create table '%s_candles'. %s" % (securityString + "_candles", db.error), 200
     else:
         # select candles for that date
-        rows = db.select("SELECT * FROM %s WHERE interval=1 AND epoch>%d AND epoch<%d ORDER BY epoch;", \
-            (securityString + "_candles", utils.epoch(requestDate), utils.epoch(nextDate)))
-
+        rows = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
+            "FROM %s WHERE interval=1 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
+            % (securityString + "_candles", utils.epoch(requestDate), utils.epoch(nextDate)))
         if rows is not None and len(rows) != 0:
+            candles[0] = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
+                "FROM %s WHERE interval=1 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
+                % (securityString + "_candles", utils.epoch(previousDate), utils.epoch(requestDate)))
+            candles[0].extend(rows)
 
-            # get data for 1' for previuos day
-            # get data for 10'
-            # get data for 1D
+            candles[3] = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
+                "FROM %s WHERE interval=10 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
+                % (securityString + "_candles", utils.epoch(previousDate), utils.epoch(nextDate)))
+            candles[6] = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
+                "FROM %s WHERE interval=24 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
+                % (securityString + "_candles", utils.epoch(yearAwayDate), utils.epoch(nextDate)))
+
             # process it all
-
+            calculate_all_candles(candles)
+            response = { "data": candles, "KC": [ema.keltner_channel(data).tolist() for data in candles] }
 
             db.close()
-            return json.dumps(rows), 200
+            return json.dumps(response, indent=4), 200
 
     # if DB has no data, get it from MOEX
-    candles = [[], [], []]
     candles[0] = read_all_candles(securityString, previousDate.strftime("%Y-%m-%d"), requestDateString, 1)
     candles[1] = read_all_candles(securityString, previousDate.strftime("%Y-%m-%d"), requestDateString, 10)
     candles[2] = read_all_candles(securityString, yearAwayDate.strftime("%Y-%m-%d"), requestDateString, 24)
 
     # write data to DB
-    insert_candles(securityString, 1, candles[0], db)
-    insert_candles(securityString, 10, candles[1], db)
-    insert_candles(securityString, 24, candles[2], db)
+    if not insert_candles(securityString, 1, candles[0], db):
+        return "Can't write 1 min data to table '%s_candles'. %s" % (securityString + "_candles", db.error), 200
+    if not insert_candles(securityString, 10, candles[1], db):
+        return "Can't write 10 min data to table '%s_candles'. %s" % (securityString + "_candles", db.error), 200
+    if not insert_candles(securityString, 24, candles[2], db):
+        return "Can't write 1 day data to table '%s_candles'. %s" % (securityString + "_candles", db.error), 200
 
+    # select candles for that date
+    candles[0] = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
+        "FROM %s WHERE interval=1 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
+        % (securityString + "_candles", utils.epoch(previousDate), utils.epoch(nextDate)))
+    candles[3] = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
+        "FROM %s WHERE interval=10 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
+        % (securityString + "_candles", utils.epoch(previousDate), utils.epoch(nextDate)))
+    candles[6] = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
+        "FROM %s WHERE interval=24 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
+        % (securityString + "_candles", utils.epoch(yearAwayDate), utils.epoch(nextDate)))
 
-
-    # get data for 1' from candles?
-    # get data for 10' from candles?
-    # get data for 1D from candles?
     # process it all
-
-
+    calculate_all_candles(candles)
+    response = { "data": candles, "KC": [ema.keltner_channel(data).tolist() for data in candles] }
 
     db.close()
-    return json.dumps(rows), 200
+    return json.dumps(response, indent=4), 200
 
 def read_all_candles(securityString, startDate, tillDate, interval):
     index = 0
@@ -121,11 +141,66 @@ def read_all_candles(securityString, startDate, tillDate, interval):
     return candles
 
 def insert_candles(securityString, interval, candles, db):
-    query = "INSERT INTO %s(epoch, trade_date, time_begin, interval, open_price, close_price, " \
-        "low_price, high_price, volume) VALUES " % securityString + "_candles"
+    query = "INSERT INTO %s (epoch, trade_date, time_begin, interval, open_price, close_price, " \
+        "low_price, high_price, volume) VALUES " % (securityString + "_candles")
     arguments = ','.join("(%d, '%s', '%s', %d, %.4f, %.4f, %.4f, %.4f, %d)" \
-        % (utils.epoch_from_str(row[6]), row[6][-9], row[6], interval, row[0], row[1], \
-            row[2], row[3], row[4]) for row in candles)
+        % (utils.epoch_from_str(row[6]), row[6][:-9], row[6], interval, row[0], row[1], \
+            row[2], row[3], row[5]) for row in candles)
     if not db.execute(query + arguments + ";"):
         db.close()
-        return "Can't write to table '%s_candles'. %s" % (securityString + "_candles", db.error), 200
+        return False
+    return True
+
+def calculate_all_candles(candles):
+    lastCandle = []
+    candles[1] = []
+    candles[2] = []
+    for candle in candles[0]:
+        if len(lastCandle) == 0:
+            lastCandle = [ list(candle)[:], list(candle)[:] ]
+        else:
+            if candle[0] % 18000 == 0:
+                candles[1].append(lastCandle[0][:])
+                lastCandle[0] = list(candle)[:]
+            else:
+                lastCandle[0][2] = max(candle[2], lastCandle[0][2])
+                lastCandle[0][3] = min(candle[3], lastCandle[0][3])
+                lastCandle[0][4] = candle[4]
+                lastCandle[0][5] += candle[5]
+            if candle[0] % 300000 == 0:
+                candles[2].append(lastCandle[1][:])
+                lastCandle[1] = list(candle)[:]
+            else:
+                lastCandle[1][2] = max(candle[2], lastCandle[1][2])
+                lastCandle[1][3] = min(candle[3], lastCandle[1][3])
+                lastCandle[1][4] = candle[4]
+                lastCandle[1][5] += candle[5]
+    candles[1].append(lastCandle[0][:])
+    candles[2].append(lastCandle[1][:])
+
+    lastCandle = []
+    candles[4] = []
+    candles[5] = []
+    for candle in candles[3]:
+        if len(lastCandle) == 0:
+            lastCandle = [ list(candle)[:], list(candle)[:] ]
+        else:
+            if candle[0] % 1800000 == 0:
+                candles[4].append(lastCandle[0][:])
+                lastCandle[0] = list(candle)[:]
+            else:
+                lastCandle[0][2] = max(candle[2], lastCandle[0][2])
+                lastCandle[0][3] = min(candle[3], lastCandle[0][3])
+                lastCandle[0][4] = candle[4]
+                lastCandle[0][5] += candle[5]
+            if candle[0] % 3600000 == 0:
+                candles[5].append(lastCandle[1][:])
+                lastCandle[1] = list(candle)[:]
+            else:
+                lastCandle[1][2] = max(candle[2], lastCandle[1][2])
+                lastCandle[1][3] = min(candle[3], lastCandle[1][3])
+                lastCandle[1][4] = candle[4]
+                lastCandle[1][5] += candle[5]
+    candles[4].append(lastCandle[0][:])
+    candles[5].append(lastCandle[1][:])
+

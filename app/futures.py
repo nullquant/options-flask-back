@@ -1,4 +1,4 @@
-from app import app, db_pg
+from app import app, utils
 import urllib.request
 from flask import request
 import datetime
@@ -23,7 +23,7 @@ def api_futures():
     except:
         return "Bad date format: '" + requestDateString + "'", 200
 
-    db = db_pg.get_db()
+    db = utils.get_db()
     if not db.connected:
         return db.message, 200
 
