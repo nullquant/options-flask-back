@@ -10,22 +10,22 @@ from time import sleep
 @app.route('/api/v1/futures', methods=['GET'])
 def api_futures():
     if not 'date' in request.args:
-        return "Error: No date provided.", 404
+        return "Error: No date provided.", 400
     requestDateString = request.args['date']
     try:
         requestDate = datetime.datetime.strptime(requestDateString, "%Y-%m-%d")
 
         if requestDate.date() > datetime.date.today():
-            return "Can't see future: '" + requestDateString + "'", 200
+            return "Can't see future: '" + requestDateString + "'", 400
 
         if requestDate.date().year < 2015:
-            return "Year should be 2015 or more: '" + requestDateString + "'", 200
+            return "Year should be 2015 or more: '" + requestDateString + "'", 400
     except:
-        return "Bad date format: '" + requestDateString + "'", 200
+        return "Bad date format: '" + requestDateString + "'", 400
 
     db = utils.get_db()
     if not db.connected:
-        return db.message, 200
+        return db.message, 500
 
     # check if table exists
     rows = db.select("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='futures_by_date');")
@@ -40,7 +40,7 @@ def api_futures():
             "volume integer, " \
             "open_position integer);"):
             db.close()
-            return "Can't create table FUTURES_BY_DATE. " + db.error, 200
+            return "Can't create table FUTURES_BY_DATE. " + db.error, 500
     else:
         # select futures for that date
         rows = db.select("SELECT * FROM futures_by_date WHERE trade_date=%s;",(requestDateString,))
@@ -78,7 +78,7 @@ def api_futures():
     if needToCommit:
         if not db.execute(query):
             db.close()
-            return "Can't write to table FUTURES_BY_DATE", 200
+            return "Can't write to table FUTURES_BY_DATE", 500
 
     # select futures for that date
     rows = db.select("SELECT * FROM futures_by_date WHERE trade_date=%s;",(requestDateString,))

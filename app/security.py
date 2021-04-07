@@ -8,12 +8,12 @@ import simplejson as json
 @app.route('/api/v1/security', methods=['GET'])
 def api_security():
     if not 'sec' in request.args:
-        return "Error: No security code provided.", 404
+        return "Error: No security code provided.", 400
     securityString = request.args['sec']
 
     db = utils.get_db()
     if not db.connected:
-        return db.message, 200
+        return db.message, 500
 
     # check if table exists
     rows = db.select("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='securities');")
@@ -27,11 +27,11 @@ def api_security():
             "last_trade character varying(10), " \
             "expiration character varying(10));"):
             db.close()
-            return "Can't create table SECURITIES. " + db.error, 200
+            return "Can't create table SECURITIES. " + db.error, 500
     else:
         # select security
         rows = db.select("SELECT * FROM securities WHERE secid=%s;",(securityString,))
-        if len(rows) == 0:
+        if rows is not None and len(rows) != 0:
             db.close()
             return json.dumps(rows), 200
 
@@ -43,7 +43,7 @@ def api_security():
     # MOEX has no such security?
     if len(rows) == 0:
         db.close()
-        return "Error: Bad security code.", 404
+        return "Error: Bad security code.", 400
 
     # write data to DB
     query = "INSERT INTO securities(secid, type_name, asset_code, name, first_trade, " \
@@ -53,7 +53,7 @@ def api_security():
 
     if not db.execute(query):
         db.close()
-        return "Can't write to table SECURITIES" + db.error, 200
+        return "Can't write to table SECURITIES" + db.error, 500
 
     # select security
     rows = db.select("SELECT * FROM securities WHERE secid=%s;",(securityString,))

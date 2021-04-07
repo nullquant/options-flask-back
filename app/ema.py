@@ -283,12 +283,12 @@ def ewma_vectorized_2d(data, alpha, axis=None, offset=None, dtype=None, order='C
 
 def keltner_channel(candles):
     close = np.array([float(row[1]) for row in candles])
-    EMA = ema.ema(close, 20)
+    EMA = ema(close, 20)
     high = np.array([float(row[3]) for row in candles])
     low = np.array([float(row[2]) for row in candles])
     close = [float(row[1]) for row in candles]
     close[:0] = [close[0]]
     close = np.array(close[:-1])
     TR = np.array([[abs(high - low), abs(high - close), abs(low - close)]]).max(axis=1)
-    ATR = ema.ema(TR[0], 14)
+    ATR = ema(TR[0], 14)
     return np.column_stack(([row[0] for row in candles], EMA + 2.0 * ATR, EMA, EMA - 2.0 * ATR))
