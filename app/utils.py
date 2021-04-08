@@ -1,3 +1,4 @@
+from app import app
 import psycopg2
 from psycopg2 import OperationalError, errorcodes, errors
 from urllib.parse import urlparse
@@ -22,8 +23,8 @@ class PostgresDB:
             self.cursor.execute(query)
         except Exception as err:
             self.error_message(err)
-            print(self.error)
             self.connection.rollback()
+            app.logger.info(self.error)
             return
         return self.cursor.fetchall()
 
@@ -35,6 +36,7 @@ class PostgresDB:
         except Exception as err:
             self.error_message(err)
             self.connection.rollback()
+            app.logger.info(self.error)
             return False
         self.connection.commit()
         return True

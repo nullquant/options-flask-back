@@ -23,17 +23,16 @@ def api_futures_candles():
         if requestDate.date() > datetime.date.today():
             return "Can't see future: '" + requestDateString + "'", 400
 
-        if requestDate.date().year < 2015:
-            return "Year should be 2015 or more: '" + requestDateString + "'", 400
+        if requestDate.date().year < 2020:
+            return "Year should be 2020 or more: '" + requestDateString + "'", 400
     except:
         return "Bad date format: '" + requestDateString + "'", 400
 
     query = "https://iss.moex.com/iss/securities/%s.json" % (securityString)
     moexData = json.loads(urllib.request.urlopen(query).read())
-    rows = moexData["description"]["data"]
 
-    if len(rows) == 0:
-        return "Error: Bad security code.", 400
+    if not "description" in moexData or not "data" in moexData["description"] or len(moexData["description"]["data"]) == 0:
+        return "Error: Bad security code:"+securityString, 400
 
     db = utils.get_db()
     if not db.connected:
@@ -66,9 +65,9 @@ def api_futures_candles():
             "high_price numeric(10, 4), " \
             "low_price numeric(10, 4), " \
             "volume integer, " \
-            "CONSTRAINT epoch_interval_key PRIMARY KEY(epoch, interval));" % (securityString + "_candles") ):
+            "PRIMARY KEY (epoch, interval));" % (securityString + "_candles") ):
             db.close()
-            return "Can't create table '%s_candles'. %s" % (securityString + "_candles", db.error), 500
+            return "Can't create table '%s'. %s" % (securityString + "_candles", db.error), 500
     else:
         # select candles for that date
         rows = db.select("SELECT epoch, open_price, high_price, low_price, close_price, volume " \
@@ -149,7 +148,7 @@ def insert_candles(securityString, interval, candles, db):
     arguments = ','.join("(%d, '%s', '%s', %d, %.4f, %.4f, %.4f, %.4f, %d)" \
         % (utils.epoch_from_str(row[6]), row[6][:-9], row[6], interval, row[0], row[1], \
             row[2], row[3], row[5]) for row in candles)
-    if not db.execute(query + arguments + " ON CONFLICT ON CONSTRAINT epoch_interval_key DO NOTHING;"):
+    if not db.execute(query + arguments + " ON CONFLICT (epoch, interval) DO NOTHING;"):
         db.close()
         return False
     return True
