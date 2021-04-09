@@ -78,17 +78,23 @@ def api_futures():
             break
         sleep(0.10)
         
+    app.logger.info("Got %d records from MOEX" % len(futuresData))
+
     # write data to DB
     needToCommit = False
     query = "INSERT INTO futures_by_date(trade_date, secid, name, open_price, low_price, high_price, " \
             "close_price, volume, open_position) VALUES "
+    count = 0
     for row in futuresData:
         if row[9] is None or row[9] == 0 or row[3] is None or row[4] is None or row[5] is None or row[6] is None:
             continue    
         query += "('%s', '%s', '%s', %.4f, %.4f, %.4f, %.4f, %d, %d), " \
             % (row[1], row[2], futures_name(row[2]), row[3], row[4], row[5], row[6], row[9], row[10])
+        count += 1
         needToCommit = True
     query = query[:-2] + ";"
+
+    app.logger.info("Insert %d records in FUTURES_BY_DATE" % count)
 
     if needToCommit:
         if not db.execute(query):
@@ -96,7 +102,7 @@ def api_futures():
             return "Can't write to table FUTURES_BY_DATE", 500
 
     # select futures for that date
-    rows = db.select("SELECT secid, name FROM options_by_date WHERE trade_date='%s' " \
+    rows = db.select("SELECT secid, name FROM futures_by_date WHERE trade_date='%s' " \
         "AND SUBSTRING(name for 2)='%s';" % (requestDateString, requestQuery))
     # sort by expiration date
     if rows is not None and len(rows) != 0:
