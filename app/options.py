@@ -143,20 +143,23 @@ def api_options():
             codes.append(row[2])
     
     # 3. Get option specifications from MOEX and high/low for base asset for given date
+    futures = ""
     optionsData = []
     for code in codes:
         query = "https://iss.moex.com/iss/securities/%s.json" % (code)
         moexData = json.loads(urllib.request.urlopen(query).read())
         row = moexData["description"]["data"]
-        futures = futures_code(row[2][2])
-        query = "https://iss.moex.com/iss/engines/futures/markets/forts/securities/%s/" \
-            "candles.json?from=%s&till=%s&interval=24&iss.meta=off" % (futures, requestDateString, requestDateString)
-        moexData = json.loads(urllib.request.urlopen(query).read())
-        high = float(moexData["candles"]["data"][0][2])
-        low = float(moexData["candles"]["data"][0][3])
-        delta = strike_delta(futures)
-        high = int(math.ceil(high / delta) * delta)
-        low = int(math.floor(low / delta) * delta)
+        newFutures = futures_code(row[2][2])
+        if newFutures != futures:
+            futures = futures_code(row[2][2])
+            query = "https://iss.moex.com/iss/engines/futures/markets/forts/securities/%s/" \
+                "candles.json?from=%s&till=%s&interval=24&iss.meta=off" % (futures, requestDateString, requestDateString)
+            moexData = json.loads(urllib.request.urlopen(query).read())
+            high = float(moexData["candles"]["data"][0][2])
+            low = float(moexData["candles"]["data"][0][3])
+            delta = strike_delta(futures)
+            high = int(math.ceil(high / delta) * delta)
+            low = int(math.floor(low / delta) * delta)
         # trade_date, secid, name, asset_code, first_trade, expiration_date, strike_high, strike_low, strike_delta
         optionsData.append([requestDateString, code, row[2][2], futures_code(row[2][2]), row[7][2], \
             row[5][2], high , low, delta])
