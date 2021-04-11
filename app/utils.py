@@ -89,4 +89,83 @@ def working_day(dt):
         return False
     dt_weekday = dt_date.weekday()
     return dt_weekday != 5 and dt_weekday != 6
-  
+
+def get_option_month(month):
+    return {
+        'A': 1,
+        'B': 2,
+        'C': 3,
+        'D': 4,
+        'E': 5,
+        'F': 6,
+        'G': 7,
+        'H': 8,
+        'I': 9,
+        'J': 10,
+        'K': 11,
+        'L': 12,
+        'M': 1,
+        'N': 2,
+        'O': 3,
+        'P': 4,
+        'Q': 5,
+        'R': 6,
+        'S': 7,
+        'T': 8,
+        'U': 9,
+        'V': 10,
+        'W': 11,
+        'X': 12
+    }.get(month, 0)
+
+def get_call_month(month):
+    return {
+        1: 'A',
+        2: 'B',
+        3: 'C',
+        4: 'D',
+        5: 'E',
+        6: 'F',
+        7: 'G',
+        8: 'H',
+        9: 'I',
+        10: 'J',
+        11: 'K',
+        12: 'L'
+    }.get(month, 'A')
+
+def get_put_month(month):
+    return {
+        1: 'M',
+        2: 'N',
+        3: 'O',
+        4: 'P',
+        5: 'Q',
+        6: 'R',
+        7: 'S',
+        8: 'T',
+        9: 'U',
+        10: 'V',
+        11: 'W',
+        12: 'X'
+    }.get(month, 'M')
+
+def futures_code(name):
+    month = {
+        1: 'F',
+        2: 'G',
+        3: 'H',
+        4: 'J',
+        5: 'K',
+        6: 'M',
+        7: 'N',
+        8: 'Q',
+        9: 'U',
+        10: 'V',
+        11: 'X',
+        12: 'Z',
+    }.get(int(name[name.index('-')+1:name.index('.')]))
+    return name[:2] + month + name[name.index('M')-1]
+
+def strike_delta(name):
+    return { "si": 500, "ri": 2500, "br": 1 }.get(name[:2].lower())

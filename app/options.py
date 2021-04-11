@@ -26,7 +26,7 @@ def api_options():
     
     if not 'q' in request.args:
         return "Error: No query provided.", 400
-    requestQuery = request.args['q']
+    requestQuery = request.args['q'].lower()
     if len(requestQuery) != 2:
         return "Bad query provided, length should be equal 2.", 400
 
@@ -45,8 +45,7 @@ def api_options():
             "first_trade character varying(10), " \
             "expiration_date character varying(10), " \
             "strike_high numeric(10, 4), " \
-            "strike_low numeric(10, 4), " \
-            "strike_delta numeric(10, 4));"):
+            "strike_low numeric(10, 4));"):
             db.close()
             return "Can't create table OPTIONS_BY_DATE. " + db.error, 500
     else:
@@ -143,36 +142,38 @@ def api_options():
             codes.append(row[2])
     
     # 3. Get option specifications from MOEX and high/low for base asset for given date
+    weekAwayDate = requestDate - datetime.timedelta(days=7)
+    weekAwayDateString = weekAwayDate.strftime("%Y-%m-%d")
     futures = ""
     optionsData = []
     for code in codes:
         query = "https://iss.moex.com/iss/securities/%s.json" % (code)
         moexData = json.loads(urllib.request.urlopen(query).read())
         row = moexData["description"]["data"]
-        newFutures = futures_code(row[2][2])
+        newFutures = utils.futures_code(row[2][2])
         if newFutures != futures:
-            futures = futures_code(row[2][2])
+            futures = newFutures
             query = "https://iss.moex.com/iss/engines/futures/markets/forts/securities/%s/" \
-                "candles.json?from=%s&till=%s&interval=24&iss.meta=off" % (futures, requestDateString, requestDateString)
+                "candles.json?from=%s&till=%s&interval=24&iss.meta=off" % (futures, weekAwayDateString, requestDateString)
             moexData = json.loads(urllib.request.urlopen(query).read())
-            high = float(moexData["candles"]["data"][0][2])
-            low = float(moexData["candles"]["data"][0][3])
-            delta = strike_delta(futures)
+            high = float(moexData["candles"]["data"][-1][2])
+            low = float(moexData["candles"]["data"][-1][3])
+            delta = utils.strike_delta(futures)
             high = int(math.ceil(high / delta) * delta)
             low = int(math.floor(low / delta) * delta)
-        # trade_date, secid, name, asset_code, first_trade, expiration_date, strike_high, strike_low, strike_delta
-        optionsData.append([requestDateString, code, row[2][2], futures_code(row[2][2]), row[7][2], \
-            row[5][2], high , low, delta])
+        # trade_date, secid, name, asset_code, first_trade, expiration_date, strike_high, strike_low
+        optionsData.append([requestDateString, options_name(code).lower(), row[2][2], utils.futures_code(row[2][2]), row[7][2], \
+            row[5][2], high , low])
 
     app.logger.info("Found %d unique options, elapsed time: %.3f" % (len(optionsData), time.time()-startTime))
     
     # write data to DB
     needToCommit = False
     query = "INSERT INTO options_by_date(trade_date, secid, name, asset_code, first_trade, expiration_date, " \
-        "strike_high, strike_low, strike_delta) VALUES "
+        "strike_high, strike_low) VALUES "
     for row in optionsData:
-        query += "('%s', '%s', '%s', '%s', '%s', '%s', %.4f, %.4f, %.4f), " \
-            % (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8])
+        query += "('%s', '%s', '%s', '%s', '%s', '%s', %.4f, %.4f), " \
+            % (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7])
         needToCommit = True
     query = query[:-2] + ";"
 
@@ -202,57 +203,22 @@ def similar_options(option1, option2):
         if option1[-3] != option2[-3]:
             return False
         month = -2
-    if get_option_month(option1[month]) != get_option_month(option2[month]):
+    if utils.get_option_month(option1[month]) != utils.get_option_month(option2[month]):
         return False
     return True
 
-def get_option_month(month):
-    return {
-        'A': 1,
-        'B': 2,
-        'C': 3,
-        'D': 4,
-        'E': 5,
-        'F': 6,
-        'G': 7,
-        'H': 8,
-        'I': 9,
-        'J': 10,
-        'K': 11,
-        'L': 12,
-        'M': 1,
-        'N': 2,
-        'O': 3,
-        'P': 4,
-        'Q': 5,
-        'R': 6,
-        'S': 7,
-        'T': 8,
-        'U': 9,
-        'V': 10,
-        'W': 11,
-        'X': 12
-    }.get(month, 0)
+def options_name(code):
+    if not code[-1].isdigit():
+        month = utils.get_option_month(code[-3])
+        return "".join([code[:2], "_", code[-4], utils.get_call_month(month), code[-2:], "_", \
+            code[-4], utils.get_put_month(month), code[-2:]])
+    else:
+        month = utils.get_option_month(code[-2])
+        return "".join([code[:2], "_", code[-3], utils.get_call_month(month), code[-1], "_", \
+            code[-3], utils.get_put_month(month), code[-1]])
 
-def futures_code(name):
-    month = {
-        1: 'F',
-        2: 'G',
-        3: 'H',
-        4: 'J',
-        5: 'K',
-        6: 'M',
-        7: 'N',
-        8: 'Q',
-        9: 'U',
-        10: 'V',
-        11: 'X',
-        12: 'Z',
-    }.get(int(name[name.index('-')+1:name.index('.')]))
-    return name[:2] + month + name[name.index('M')-1]
 
-def strike_delta(name):
-    return { "Si": 500, "RI": 2500, "BR": 1 }.get(name[:2])
+
 '''
 def options_name(name):
     monthLetter = name[-2] if name[-1].isdigit() else name[-3]

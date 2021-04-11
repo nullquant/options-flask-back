@@ -4,7 +4,6 @@ from flask import request
 import datetime
 import simplejson as json
 from time import sleep
-import numpy as np
 import time
 
 # A route to get candles data
@@ -13,7 +12,7 @@ import time
 def api_futures_candles():
     if not 'sec' in request.args:
         return "Error: No security code provided.", 400
-    securityString = request.args['sec'].lower()
+    securityString = request.args['sec']
     if not 'date' in request.args:
         return "Error: No date provided.", 400
     requestDateString = request.args['date']
@@ -42,6 +41,21 @@ def api_futures_candles():
         requestDate = requestDate - datetime.timedelta(days=1)
     requestDateString = requestDate.strftime("%Y-%m-%d")
 
+    candles, code = get_futures_candles(requestDate, securityString, db)
+
+    if code != 200:
+        return candles, code
+
+    # process it all
+    calculate_all_candles(candles)
+    response = { "data": candles, "KC": [ema.keltner_channel(data).tolist() for data in candles] }
+
+    db.close()
+    return json.dumps(response), 200
+
+def get_futures_candles(requestDate, security, db):
+    securityString = security.lower()
+    requestDateString = requestDate.strftime("%Y-%m-%d")
     yearAwayDate = requestDate - datetime.timedelta(days=365)
     if yearAwayDate.date().year < 2015:
         yearAwayDate = datetime.date(2015, 1, 1)
@@ -86,12 +100,7 @@ def api_futures_candles():
                 "FROM %s WHERE interval=24 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
                 % (securityString + "_candles", utils.epoch(yearAwayDate), utils.epoch(nextDate)))
 
-            # process it all
-            calculate_all_candles(candles)
-            response = { "data": candles, "KC": [ema.keltner_channel(data).tolist() for data in candles] }
-
-            db.close()
-            return json.dumps(response, indent=4), 200
+            return candles, 200
 
     # if DB has no data, get it from MOEX
     candles[0] = read_all_candles(securityString, previousDate.strftime("%Y-%m-%d"), requestDateString, 1)
@@ -117,12 +126,7 @@ def api_futures_candles():
         "FROM %s WHERE interval=24 AND epoch>%d AND epoch<%d ORDER BY epoch;" \
         % (securityString + "_candles", utils.epoch(yearAwayDate), utils.epoch(nextDate)))
 
-    # process it all
-    calculate_all_candles(candles)
-    response = { "data": candles, "KC": [ema.keltner_channel(data).tolist() for data in candles] }
-
-    db.close()
-    return json.dumps(response, indent=4), 200
+    return candles, 200
 
 def read_all_candles(securityString, startDate, tillDate, interval):
     index = 0
@@ -223,5 +227,3 @@ def calculate_all_candles(candles):
         candle[0] -= delta
         candles6.append(candle)
     candles[6] = candles6
-
-    
