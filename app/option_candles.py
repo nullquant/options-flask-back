@@ -97,6 +97,9 @@ def api_options_candles():
                 return candles, code
 
             response = { "calls": calls, "puts": puts, "asset": candles[0] }
+
+            
+
             db.close()
             return json.dumps(response), 200
     
