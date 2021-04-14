@@ -14,7 +14,7 @@ from app import futures
 from app import options
 from app import security
 from app import futures_candles
-from app import option_candles
+from app import option_tables
 
 if __name__ == '__main__':
     app.run()

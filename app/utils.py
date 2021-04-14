@@ -2,7 +2,6 @@ from app import app
 import psycopg2
 from psycopg2 import OperationalError, errorcodes, errors
 from urllib.parse import urlparse
-import os
 import sys
 import holidays
 import datetime
@@ -166,6 +165,23 @@ def futures_code(name):
         12: 'Z',
     }.get(int(name[name.index('-')+1:name.index('.')]))
     return name[:2] + month + name[name.index('M')-1]
+
+def futures_name(name):
+    month = {
+        'F': '-1.',
+        'G': '-2.',
+        'H': '-3.',
+        'J': '-4.',
+        'K': '-5.',
+        'M': '-6.',
+        'N': '-7.',
+        'Q': '-8.',
+        'U': '-9.',
+        'V': '-10.',
+        'X': '-11.',
+        'Z': '-12.'
+    }.get(name[2], '.')
+    return name[:2] + month + '2' + name[-1]
 
 def strike_delta(name):
     return { "si": 500, "ri": 2500, "br": 1 }.get(name[:2].lower())

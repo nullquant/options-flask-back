@@ -89,7 +89,7 @@ def api_futures():
         if row[9] is None or row[9] == 0 or row[3] is None or row[4] is None or row[5] is None or row[6] is None:
             continue    
         query += "('%s', '%s', '%s', %.4f, %.4f, %.4f, %.4f, %d, %d), " \
-            % (row[1], row[2], futures_name(row[2]), row[3], row[4], row[5], row[6], row[9], row[10])
+            % (row[1], row[2], utils.futures_name(row[2]), row[3], row[4], row[5], row[6], row[9], row[10])
         count += 1
         needToCommit = True
     query = query[:-2] + ";"
@@ -110,23 +110,6 @@ def api_futures():
     db.close()
     app.logger.info("MOEX Futures: Send %d records" % len(rows))
     return json.dumps(rows), 200
-
-def futures_name(name):
-    month = {
-        'F': '-1.',
-        'G': '-2.',
-        'H': '-3.',
-        'J': '-4.',
-        'K': '-5.',
-        'M': '-6.',
-        'N': '-7.',
-        'Q': '-8.',
-        'U': '-9.',
-        'V': '-10.',
-        'X': '-11.',
-        'Z': '-12.'
-    }.get(name[2], '.')
-    return name[:2] + month + '2' + name[-1]
 
 def futures_sort(row):
     name = row[1]
