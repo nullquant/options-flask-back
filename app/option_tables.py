@@ -78,9 +78,18 @@ def api_options_tables():
         epoch = option_data[index][0]
 
         while(True):
-            strike = strike_string(option_data[index][5])
-            last_price[option_data[index][4]][strike] = [option_data[index][6], option_data[index][7], option_data[index][8], \
-                                                        option_data[index][9], option_data[index][10], option_data[index][11]]
+            strike = num_string(option_data[index][5])
+            #  6    7     8       9      10  11
+            # bid, ask, last, last_time, oi, iv
+            arr = [num_string(option_data[index][6]), num_string(option_data[index][7]), \
+                num_string(option_data[index][8]), num_string(option_data[index][9]), \
+                num_string(option_data[index][10]), num_string(option_data[index][11])]
+            if arr[0] == '188888':
+                arr[0] = ''
+            if arr[1] == '188888':
+                arr[1] = ''
+            last_price[option_data[index][4]][strike] = arr
+                
             if index+1 == len(option_data) or option_data[index+1][0] > epoch:
                 break
             index = index + 1
@@ -93,10 +102,14 @@ def api_options_tables():
         option_table = []
         for i in range(-9, 11 + put_start):
             strike_price = call_itm_price + i * delta
-            strike = strike_string(strike_price)
+            strike = num_string(strike_price)
             
             last_call = last_price['CALL'].get(strike)
+            if last_call is None:
+                last_call = ['', '', '', '', '', '']
             last_put = last_price['PUT'].get(strike)
+            if last_put is None:
+                last_put = ['', '', '', '', '', '']
 
             if strike_price == call_itm_price and strike_price == put_itm_price:
                 itm = "CALL&PUT"
@@ -105,28 +118,42 @@ def api_options_tables():
             else:
                 itm = "PUT"
             
-            call_intrinsic = max(0, asset_price - strike_price)
-            call_extrinsic_bid = float(last_call[0]) - float(call_intrinsic) if len(last_call[0]) != 0 else ''
-            call_extrinsic_ask = float(last_call[1]) - float(call_intrinsic) if len(last_call[1]) != 0 else ''
-            put_intrinsic = max(0, strike_price - asset_price)
-            put_extrinsic_bid = float(last_put[0]) - float(put_intrinsic) if len(last_put[0]) != 0 else ''
-            put_extrinsic_ask = float(last_put[1]) - float(put_intrinsic) if len(last_put[0]) != 0 else ''
+            #call_intrinsic = max(0, asset_price - strike_price)
+            #call_extrinsic_bid = float(last_call[0]) - float(call_intrinsic) if len(last_call[0]) != 0 else ''
+            #call_extrinsic_ask = float(last_call[1]) - float(call_intrinsic) if len(last_call[1]) != 0 else ''
+            #put_intrinsic = max(0, strike_price - asset_price)
+            #put_extrinsic_bid = float(last_put[0]) - float(put_intrinsic) if len(last_put[0]) != 0 else ''
+            #put_extrinsic_ask = float(last_put[1]) - float(put_intrinsic) if len(last_put[0]) != 0 else ''
+
+            if len(last_call[0]) != 0 and len(last_call[1]) != 0:
+                spread = float(last_call[1]) - float(last_call[0])
+                call_mid = int(round( (float(last_call[1]) + float(last_call[0])) / 2.0))
+                if call_mid != 0:
+                    call_mid = "%d (%d%%)" % (call_mid, int(round(spread * 100.0 / call_mid)))
+            else:
+                call_mid = ''
+
+            if len(last_put[0]) != 0 and len(last_put[1]) != 0:
+                spread = float(last_put[1]) - float(last_put[0])
+                put_mid = int(round( (float(last_put[1]) + float(last_put[0])) / 2.0))
+                if put_mid != 0:
+                    put_mid = "%d (%d%%)" % (put_mid, int(round(spread * 100.0 / put_mid)))
+            else:
+                put_mid = ''
 
             option_table.append({"strike": strike, 
                                 "call_bid": last_call[0],
+                                "call_mid": call_mid,
                                 "call_ask": last_call[1],
-                                "call_last": last_call[2], 
-                                "call_last_time": last_call[3],
-                                "call_ext_bid": call_extrinsic_bid, 
-                                "call_ext_ask": call_extrinsic_ask, 
+                                "call_last": last_call[2],
+                                "call_last_time": utils.epoch_from_str(last_call[3], '%d.%m.%y %H:%M:%S'),
                                 "call_oi": last_call[4], 
                                 "call_iv": last_call[5], 
                                 "put_bid": last_put[0],
+                                "put_mid": put_mid,
                                 "put_ask": last_put[1],
                                 "put_last": last_put[2],
-                                "put_last_time": last_put[3],
-                                "put_ext_bid": put_extrinsic_bid, 
-                                "put_ext_ask": put_extrinsic_ask, 
+                                "put_last_time": utils.epoch_from_str(last_put[3], '%d.%m.%y %H:%M:%S'),
                                 "put_oi": last_put[4], 
                                 "put_iv": last_put[5], 
                                 "itm": itm })
@@ -160,9 +187,21 @@ def find_asset_price(epoch, asset):
         return asset[index_left][4], index_left # close
     return asset[index_left][1], index_left # open
 
-def strike_string(strike):
-    num = float(strike)
+def is_number(string):
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+
+def num_string(input_string):
+    if isinstance(input_string, str) and not is_number(input_string):
+        return input_string
+    num = float(input_string)
     if num.is_integer():
         return str(int(num))
+    elif input_string[-2:] == '00':
+        return "%.2f" % num
     else:
-        return str(num) 
+        return "%.4f" % num
+

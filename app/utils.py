@@ -79,8 +79,10 @@ ru_holidays = holidays.RU()
 def epoch(dt):
     return int(round(dt.timestamp() * 1000))
 
-def epoch_from_str(dateString):
-    return epoch(datetime.datetime.strptime(dateString, "%Y-%m-%d %H:%M:%S"))
+def epoch_from_str(dateString, format_string="%Y-%m-%d %H:%M:%S"):
+    if len(dateString) == 0:
+        return dateString
+    return int(round((datetime.datetime.strptime(dateString, format_string)).timestamp() * 1000))
 
 def working_day(dt):
     dt_date = dt.date()
@@ -184,4 +186,4 @@ def futures_name(name):
     return name[:2] + month + '2' + name[-1]
 
 def strike_delta(name):
-    return { "si": 500, "ri": 2500, "br": 1 }.get(name[:2].lower())
+    return { "si": 250, "ri": 2500, "br": 1 }.get(name[:2].lower())
