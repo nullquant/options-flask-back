@@ -70,6 +70,20 @@ def api_options_tables():
 
     db.close()
 
+    sigma_cc = []
+    sqrt_year = math.sqrt(252) * 100
+    for i in range(21, len(candles[6])):
+        sum_ccl2 = 0
+        sum2_ccl = 0
+        for j in range(21):
+            ccl = math.log(candles[6][i - 20 + j][4] / candles[6][i - 20 + j - 1][4])
+            sum_ccl2 = sum_ccl2 + ccl * ccl
+            sum2_ccl = sum2_ccl + ccl
+        sigma_cc.append([candles[6][i][0], \
+                    math.sqrt(sum_ccl2 / 19.0 - sum2_ccl * sum2_ccl / 19.0 / 20.0) * sqrt_year])
+        #sigma_cc.append([datetime.datetime.fromtimestamp(candles[6][i][0] // 1000), \
+        #            math.sqrt(sum_ccl2 / 19.0 - sum2_ccl * sum2_ccl / 19.0 / 20.0) * math.sqrt(252)])
+
     delta = utils.strike_delta(optionString)
     response = []
     index = 0
@@ -135,9 +149,9 @@ def api_options_tables():
 
             if len(last_put[0]) != 0 and len(last_put[1]) != 0:
                 spread = float(last_put[1]) - float(last_put[0])
-                put_mid = int(round( (float(last_put[1]) + float(last_put[0])) / 2.0))
+                put_mid = (float(last_put[1]) + float(last_put[0])) / 2.0
                 if put_mid != 0:
-                    put_mid = "%d (%d%%)" % (put_mid, int(round(spread * 100.0 / put_mid)))
+                    put_mid = "%.2f (%d%%)" % (put_mid, int(round(spread * 100.0 / put_mid)))
             else:
                 put_mid = ''
 
@@ -159,7 +173,7 @@ def api_options_tables():
                                 "itm": itm })
         response.append({"epoch":epoch, "asset": asset_price, "option_table": option_table[:]})
         index += 1    
-
+    response = [response, sigma_cc]
     return json.dumps(response), 200
 
 
