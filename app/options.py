@@ -45,7 +45,8 @@ def api_options():
             "first_trade character varying(10), " \
             "expiration_date character varying(10), " \
             "strike_high numeric(10, 4), " \
-            "strike_low numeric(10, 4));"):
+            "strike_low numeric(10, 4)), " \
+            "PRIMARY KEY (trade_date, secid));"):
             db.close()
             return "Can't create table OPTIONS_BY_DATE. " + db.error, 500
     else:
@@ -140,7 +141,7 @@ def api_options():
                 break
         if not alreadyThere:
             codes.append(row[2])
-    
+
     # 3. Get option specifications from MOEX and high/low for base asset for given date
     weekAwayDate = requestDate - datetime.timedelta(days=7)
     weekAwayDateString = weekAwayDate.strftime("%Y-%m-%d")
@@ -175,7 +176,7 @@ def api_options():
         query += "('%s', '%s', '%s', '%s', '%s', '%s', %.4f, %.4f), " \
             % (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7])
         needToCommit = True
-    query = query[:-2] + ";"
+    query = query[:-2] + " ON CONFLICT (trade_date, secid) DO NOTHING;"
 
     if needToCommit:
         if not db.execute(query):
@@ -216,53 +217,3 @@ def options_name(code):
         month = utils.get_option_month(code[-2])
         return "".join([code[:2], "_", code[-3], utils.get_call_month(month), code[-1], "_", \
             code[-3], utils.get_put_month(month), code[-1]])
-
-
-
-'''
-def options_name(name):
-    monthLetter = name[-2] if name[-1].isdigit() else name[-3]
-    month = {
-        'A': '-1.',
-        'B': '-2.',
-        'C': '-3.',
-        'D': '-4.',
-        'E': '-5.',
-        'F': '-6.',
-        'G': '-7.',
-        'H': '-8.',
-        'I': '-9.',
-        'J': '-10.',
-        'K': '-11.',
-        'L': '-12.',
-        'M': '-1.',
-        'N': '-2.',
-        'O': '-3.',
-        'P': '-4.',
-        'Q': '-5.',
-        'R': '-6.',
-        'S': '-7.',
-        'T': '-8.',
-        'U': '-9.',
-        'V': '-10.',
-        'W': '-11.',
-        'X': '-12.'
-    }.get(monthLetter, '.')
-    if name[-1].isdigit():
-        return name[:2] + month + '2' + name[-1]
-    elif name[-1] == 'A':
-        return name[:2] + "-1w" + month[1:] + '2' + name[-2]
-    else:
-        return name[:2] + "-2w" + month[1:] + '2' + name[-2]
-
-def options_sort(row):
-    name = row[0]
-    date = name.split('-')[1]
-    key = 0
-    if 'w' in date:
-        key = (int(date[0]) - 3) * 0.1
-        date = date.split('w')[1]
-    key += int(date.split('.')[0])
-    key += int(date[-1]) * 12
-    return key
-'''

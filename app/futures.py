@@ -45,7 +45,8 @@ def api_futures():
             "high_price numeric(10, 4), " \
             "close_price numeric(10, 4), " \
             "volume integer, " \
-            "open_position integer);"):
+            "open_position integer, " \
+            "PRIMARY KEY (trade_date, secid));"):
             db.close()
             return "Can't create table FUTURES_BY_DATE. " + db.error, 500
     else:
@@ -88,11 +89,12 @@ def api_futures():
     for row in futuresData:
         if row[9] is None or row[9] == 0 or row[3] is None or row[4] is None or row[5] is None or row[6] is None:
             continue    
-        query += "('%s', '%s', '%s', %.4f, %.4f, %.4f, %.4f, %d, %d), " \
-            % (row[1], row[2], utils.futures_name(row[2]), row[3], row[4], row[5], row[6], row[9], row[10])
-        count += 1
-        needToCommit = True
-    query = query[:-2] + ";"
+        if 'Si' in row[2] or 'BR' in row[2] or 'RI' in row[2]:
+            query += "('%s', '%s', '%s', %.4f, %.4f, %.4f, %.4f, %d, %d), " \
+                % (row[1], row[2], utils.futures_name(row[2]), row[3], row[4], row[5], row[6], row[9], row[10])
+            count += 1
+            needToCommit = True
+    query = query[:-2] + " ON CONFLICT (trade_date, secid) DO NOTHING;"
 
     app.logger.info("Insert %d records in FUTURES_BY_DATE" % count)
 
@@ -103,7 +105,7 @@ def api_futures():
 
     # select futures for that date
     rows = db.select("SELECT secid, name FROM futures_by_date WHERE trade_date='%s' " \
-        "AND SUBSTRING(name for 2)='%s';" % (requestDateString, requestQuery))
+        "AND SUBSTRING(secid for 2)='%s';" % (requestDateString, requestQuery))
     # sort by expiration date
     if rows is not None and len(rows) != 0:
         rows.sort(key=futures_sort)

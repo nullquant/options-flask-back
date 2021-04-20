@@ -1,9 +1,7 @@
-from app import app, utils, futures_candles
-import urllib.request
+from app import app, utils, futures_candles, gbs
 from flask import request
 import datetime
 import simplejson as json
-from time import sleep
 import math
 
 # A route to get option tables data
@@ -68,9 +66,26 @@ def api_options_tables():
         return candles, code
     asset = candles[0]
 
+    '''
+    query = "SELECT * FROM options_by_date WHERE secid='%s';" \
+        % (optionString)
+    option_description = db.select(query)
+    if option_description is None or len(option_description) == 0:
+        db.close()
+        return "Option '%s' description is not found" % optionString, 500
+
+    first_trading_epoch = utils.epoch_from_str(option_description[0][4], "%Y-%m-%d")
+    last_trading_epoch = utils.epoch_from_str(option_description[0][5], "%Y-%m-%d")
+    trading_days =  (last_trading_epoch - first_trading_epoch) // (1000 * 60 * 60 * 24) 
+    if optionString[:2] == "Si" and trading_days > 30:
+        last_trading_epoch += 14 * 60 * 60 * 1000
+    else:
+        last_trading_epoch += 18 * 60 * 60 * 1000 + 50 * 60 * 1000
+    '''
+    
     db.close()
 
-    sigma_cc = []
+    historical_volatility = []
     sqrt_year = math.sqrt(252) * 100
     for i in range(21, len(candles[6])):
         sum_ccl2 = 0
@@ -79,10 +94,8 @@ def api_options_tables():
             ccl = math.log(candles[6][i - 20 + j][4] / candles[6][i - 20 + j - 1][4])
             sum_ccl2 = sum_ccl2 + ccl * ccl
             sum2_ccl = sum2_ccl + ccl
-        sigma_cc.append([candles[6][i][0], \
+        historical_volatility.append([candles[6][i][0], \
                     math.sqrt(sum_ccl2 / 19.0 - sum2_ccl * sum2_ccl / 19.0 / 20.0) * sqrt_year])
-        #sigma_cc.append([datetime.datetime.fromtimestamp(candles[6][i][0] // 1000), \
-        #            math.sqrt(sum_ccl2 / 19.0 - sum2_ccl * sum2_ccl / 19.0 / 20.0) * math.sqrt(252)])
 
     delta = utils.strike_delta(optionString)
     response = []
@@ -141,9 +154,12 @@ def api_options_tables():
 
             if len(last_call[0]) != 0 and len(last_call[1]) != 0:
                 spread = float(last_call[1]) - float(last_call[0])
-                call_mid = int(round( (float(last_call[1]) + float(last_call[0])) / 2.0))
+                call_mid = (float(last_call[1]) + float(last_call[0])) / 2.0
                 if call_mid != 0:
-                    call_mid = "%d (%d%%)" % (call_mid, int(round(spread * 100.0 / call_mid)))
+                    call_mid = "%s (%d%%)" % (utils.round_price(optionString, call_mid), \
+                        int(round(spread * 100.0 / call_mid)))
+                else:
+                    call_mid = ''
             else:
                 call_mid = ''
 
@@ -151,10 +167,61 @@ def api_options_tables():
                 spread = float(last_put[1]) - float(last_put[0])
                 put_mid = (float(last_put[1]) + float(last_put[0])) / 2.0
                 if put_mid != 0:
-                    put_mid = "%.2f (%d%%)" % (put_mid, int(round(spread * 100.0 / put_mid)))
+                    put_mid = "%s (%d%%)" % (utils.round_price(optionString, put_mid), \
+                        int(round(spread * 100.0 / put_mid)))
+                else:
+                    put_mid = ''
             else:
                 put_mid = ''
+            '''
+            fs = float(asset_price)
+            x = float(strike)
+            t = (last_trading_epoch - epoch) / (1000 * 60 * 60 * 24 * 365)
 
+            if len(last_call[0]) != 0:
+                cp = float(last_call[0])
+                mincp = gbs.black_76('c', fs, x, t, 0, 0.005)
+                if cp >= mincp[0]:
+                    v = gbs.euro_implied_vol_76('c', fs, x, t, 0, cp)
+                else:
+                    v = 0.0
+            else:
+                v = 0.0
+            call_bid_vol = "%.2f" % (v * 100)
+
+            if len(last_call[1]) != 0:
+                cp = float(last_call[1])
+                mincp = gbs.black_76('c', fs, x, t, 0, 0.005)
+                if cp >= mincp[0]:
+                    v = gbs.euro_implied_vol_76('c', fs, x, t, 0, cp)
+                else:
+                    v = 0.0
+            else:
+                v = 0.0
+            call_ask_vol = "%.2f" % (v * 100)
+
+            if len(last_put[0]) != 0:
+                cp = float(last_put[0])
+                mincp = gbs.black_76('p', fs, x, t, 0, 0.005)
+                if cp >= mincp[0]:
+                    v = gbs.euro_implied_vol_76('p', fs, x, t, 0, cp)
+                else:
+                    v = 0.0
+            else:
+                v = 0.0
+            put_ask_vol = "%.2f" % (v * 100)
+
+            if len(last_put[1]) != 0:
+                cp = float(last_put[1])
+                mincp = gbs.black_76('p', fs, x, t, 0, 0.005)
+                if cp >= mincp[0]:
+                    v = gbs.euro_implied_vol_76('p', fs, x, t, 0, cp)
+                else:
+                    v = 0.0
+            else:
+                v = 0.0
+            put_bid_vol = "%.2f" % (v * 100)
+            '''
             option_table.append({"strike": strike, 
                                 "call_bid": last_call[0],
                                 "call_mid": call_mid,
@@ -173,7 +240,7 @@ def api_options_tables():
                                 "itm": itm })
         response.append({"epoch":epoch, "asset": asset_price, "option_table": option_table[:]})
         index += 1    
-    response = [response, sigma_cc]
+    response = [response, historical_volatility]
     return json.dumps(response), 200
 
 

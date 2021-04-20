@@ -166,6 +166,8 @@ def futures_code(name):
         11: 'X',
         12: 'Z',
     }.get(int(name[name.index('-')+1:name.index('.')]))
+    if name[:3] == "RTS":
+        return "RI" + month + name[name.index('M')-1]
     return name[:2] + month + name[name.index('M')-1]
 
 def futures_name(name):
@@ -183,7 +185,19 @@ def futures_name(name):
         'X': '-11.',
         'Z': '-12.'
     }.get(name[2], '.')
+    if name[:2] == "RI":
+        return "RTS" + month + '2' + name[-1]
     return name[:2] + month + '2' + name[-1]
 
 def strike_delta(name):
     return { "si": 250, "ri": 2500, "br": 1 }.get(name[:2].lower())
+
+def price_tick(name):
+    return { "si": 1, "ri": 10, "br": 0.01 }.get(name[:2].lower())
+
+def round_price(name, price):
+    if price == 0:
+        return ''
+    return { "si": "%d" % int(round(price)), \
+             "ri": "%d" % (int(round(price / 10)) * 10), \
+             "br": "%.2f" % (int(round(price / 0.01)) * 0.01) }.get(name[:2].lower())
