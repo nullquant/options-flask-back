@@ -173,55 +173,7 @@ def api_options_tables():
                     put_mid = ''
             else:
                 put_mid = ''
-            '''
-            fs = float(asset_price)
-            x = float(strike)
-            t = (last_trading_epoch - epoch) / (1000 * 60 * 60 * 24 * 365)
-
-            if len(last_call[0]) != 0:
-                cp = float(last_call[0])
-                mincp = gbs.black_76('c', fs, x, t, 0, 0.005)
-                if cp >= mincp[0]:
-                    v = gbs.euro_implied_vol_76('c', fs, x, t, 0, cp)
-                else:
-                    v = 0.0
-            else:
-                v = 0.0
-            call_bid_vol = "%.2f" % (v * 100)
-
-            if len(last_call[1]) != 0:
-                cp = float(last_call[1])
-                mincp = gbs.black_76('c', fs, x, t, 0, 0.005)
-                if cp >= mincp[0]:
-                    v = gbs.euro_implied_vol_76('c', fs, x, t, 0, cp)
-                else:
-                    v = 0.0
-            else:
-                v = 0.0
-            call_ask_vol = "%.2f" % (v * 100)
-
-            if len(last_put[0]) != 0:
-                cp = float(last_put[0])
-                mincp = gbs.black_76('p', fs, x, t, 0, 0.005)
-                if cp >= mincp[0]:
-                    v = gbs.euro_implied_vol_76('p', fs, x, t, 0, cp)
-                else:
-                    v = 0.0
-            else:
-                v = 0.0
-            put_ask_vol = "%.2f" % (v * 100)
-
-            if len(last_put[1]) != 0:
-                cp = float(last_put[1])
-                mincp = gbs.black_76('p', fs, x, t, 0, 0.005)
-                if cp >= mincp[0]:
-                    v = gbs.euro_implied_vol_76('p', fs, x, t, 0, cp)
-                else:
-                    v = 0.0
-            else:
-                v = 0.0
-            put_bid_vol = "%.2f" % (v * 100)
-            '''
+                
             option_table.append({"strike": strike, 
                                 "call_bid": last_call[0],
                                 "call_mid": call_mid,
