@@ -3,6 +3,7 @@ from flask import request
 import datetime
 import simplejson as json
 import math
+import numpy as np
 
 # A route to get option tables data
 # http://127.0.0.1:5000/api/v1/options/tables?sec=si_bd1d_bp1d&asset=sim1&date=2021-04-14
@@ -66,23 +67,12 @@ def api_options_tables():
         return candles, code
     asset = candles[0]
 
-    '''
-    query = "SELECT * FROM options_by_date WHERE secid='%s';" \
-        % (optionString)
-    option_description = db.select(query)
-    if option_description is None or len(option_description) == 0:
+    query = "SELECT * FROM iv_history WHERE SUBSTRING(LOWER(asset) for 2) = '%s';" \
+        % (optionString[:2])
+    iv_history = db.select(query)
+    if iv_history is None or len(iv_history) == 0:
         db.close()
-        return "Option '%s' description is not found" % optionString, 500
-
-    first_trading_epoch = utils.epoch_from_str(option_description[0][4], "%Y-%m-%d")
-    last_trading_epoch = utils.epoch_from_str(option_description[0][5], "%Y-%m-%d")
-    trading_days =  (last_trading_epoch - first_trading_epoch) // (1000 * 60 * 60 * 24) 
-    if optionString[:2] == "Si" and trading_days > 30:
-        last_trading_epoch += 14 * 60 * 60 * 1000
-    else:
-        last_trading_epoch += 18 * 60 * 60 * 1000 + 50 * 60 * 1000
-    '''
-    
+        return "Option '%s' IV history is not found" % optionString, 500
     db.close()
 
     historical_volatility = []
@@ -96,6 +86,30 @@ def api_options_tables():
             sum2_ccl = sum2_ccl + ccl
         historical_volatility.append([candles[6][i][0], \
                     math.sqrt(sum_ccl2 / 19.0 - sum2_ccl * sum2_ccl / 19.0 / 20.0) * sqrt_year])
+
+    iv_history = np.array(iv_history)
+    iv_history = iv_history[iv_history[:, 0].argsort()]
+    expiration_dates = list(set([date for date in iv_history[:,2]]))
+    expiration_dates.sort()
+    week2 = []
+    week14 = []    
+    for exp_date in expiration_dates:
+        option = iv_history[iv_history[:,2] == exp_date]
+        option = option[option[:, 0].argsort()]
+        if option[0, 0] == iv_history[0][0]:
+            continue
+        duration = option[0][3]
+        if duration < 17:
+            for row in option:
+                if row[0] < requestDateString:
+                    week2.append([utils.epoch_from_str(row[0], "%Y-%m-%d"), row[4], row[3]])
+            week2.append([utils.epoch_from_str(row[0], "%Y-%m-%d")+1000, 'NaN', 0])
+        elif duration < 130:
+            for row in option:
+                if row[0] < requestDateString:
+                    week14.append([utils.epoch_from_str(row[0], "%Y-%m-%d"), row[4], row[3]])
+            week14.append([utils.epoch_from_str(row[0], "%Y-%m-%d")+1000, 'NaN', 0])
+    
 
     delta = utils.strike_delta(optionString)
     response = []
@@ -145,13 +159,6 @@ def api_options_tables():
             else:
                 itm = "PUT"
             
-            #call_intrinsic = max(0, asset_price - strike_price)
-            #call_extrinsic_bid = float(last_call[0]) - float(call_intrinsic) if len(last_call[0]) != 0 else ''
-            #call_extrinsic_ask = float(last_call[1]) - float(call_intrinsic) if len(last_call[1]) != 0 else ''
-            #put_intrinsic = max(0, strike_price - asset_price)
-            #put_extrinsic_bid = float(last_put[0]) - float(put_intrinsic) if len(last_put[0]) != 0 else ''
-            #put_extrinsic_ask = float(last_put[1]) - float(put_intrinsic) if len(last_put[0]) != 0 else ''
-
             if len(last_call[0]) != 0 and len(last_call[1]) != 0:
                 spread = float(last_call[1]) - float(last_call[0])
                 call_mid = (float(last_call[1]) + float(last_call[0])) / 2.0
@@ -192,7 +199,7 @@ def api_options_tables():
                                 "itm": itm })
         response.append({"epoch":epoch, "asset": asset_price, "option_table": option_table[:]})
         index += 1    
-    response = [response, historical_volatility]
+    response = [response, historical_volatility, [week2, week14]]
     return json.dumps(response), 200
 
 
